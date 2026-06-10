@@ -17,7 +17,7 @@ from kb_schema import (NAME_COL, SUMMARY_COL, EMBEDDING_COL)
 
 _WORD = re.compile(r"[\wʼ'-]+", re.UNICODE)
 # поля, що формують пошуковий текст картки (крім службових)
-_TEXT_FIELDS = [NAME_COL, SUMMARY_COL, "Категорія", "Питання / тригер",
+_TEXT_FIELDS = [NAME_COL, SUMMARY_COL, "Категорія", "Сфера", "Питання / тригер",
                 "Тип послуги", "Послуги", "Джерело",
                 "Юрисдикція", "Юрисдикція / регіон"]
 

@@ -32,6 +32,19 @@ _CAT_KEYWORDS = {
     "1.5 Внутрішні політики": ["privacy", "policy", "cookie", "gdpr", "dpa", "політик"],
     "1.6 Регулятори / Суди": ["позов", "претензі", "demand", "суд", "податков", "регулятор", "апеляц", "звернення"],
 }
+# сфери права для рісьорчів (свій набір, не документні 1.1–1.6)
+_SPHERE_KEYWORDS = {
+    "Податкове":               ["податок", "пдв", "єдиний податок", "пку", "оподатк", "tax", "акциз"],
+    "Валютне / ЗЕД":           ["валют", "зед", "нерезидент", "експорт послуг", "нбу", "конверт"],
+    "Корпоративне":            ["статут", "частк", "акці", "корпоратив", "засновник", "реорганіз"],
+    "Інвестиційне":            ["safe", "інвест", "vesting", "share", "convertible", "раунд"],
+    "Трудове / HR":            ["трудов", "звільн", "employment", "non-compete", "кзпп", "esop", "опціон"],
+    "IP / IT":                 ["інтелектуальн", "торгов марк", "патент", "it-послуг", "софт", "ліцензійн", "копірайт"],
+    "Регуляторне / комплаєнс": ["ліценз", "регулятор", "gdpr", "комплаєнс", "дозвіл", "санкц"],
+    "Судова практика":         ["позов", "апеляц", "касац", "судов практик", "оскарж"],
+    "Міжнародне":              ["конвенц", "подвійн оподаткув", "brussels", "hague", "міжнародн", "транскордон"],
+    "Договірне":               ["договір", "угод", "nda", "клоз", "контракт"],
+}
 _JUR_TOKENS = {
     "UA": ["україн", "київ", "ukrain", "ua", "+380"],
     "DE": ["німеч", "germany", "deutsch", "münchen", "munich", "berlin", " de "],
@@ -196,16 +209,20 @@ def _heuristic(raw, hint_type=None):
         fields.update({"Тип послуги": svc, "Юрисдикція / регіон": jur,
                        "Контакти": _contacts(text), "Партнер": "FALSE"})
         reasons.append(f"тип послуги: {svc}")
-    else:
+    elif table == "Рісьорчі":
+        sph = _detect_one(low, _SPHERE_KEYWORDS) or "Договірне"
+        fields.update({"Сфера": sph, "Юрисдикція": jur,
+                       "Питання / тригер": _question(text)})
+        reasons.append(f"сфера: {sph}")
+    else:  # Прецеденти / Шаблони — документні категорії 1.1–1.6
         cat = _detect_cat(low) or "1.1 Договірні"
         fields.update({"Категорія": cat, "Юрисдикція": jur})
         reasons.append(f"категорія: {cat}")
-        if table == "Рісьорчі":
-            fields["Питання / тригер"] = _question(text)
 
     # 4) впевненість: скільки сигналів спрацювало
+    has_class = _detect_cat(low) is not None or _detect_one(low, _SPHERE_KEYWORDS) is not None
     strong = sum([has_contact, has_ph, is_qa,
-                  _detect_cat(low) is not None, _detect_one(low, _JUR_TOKENS) is not None])
+                  has_class, _detect_one(low, _JUR_TOKENS) is not None])
     confidence = round(min(0.95, 0.4 + 0.13 * strong), 2)
 
     return {"table": table, "fields": fields, "confidence": confidence,
