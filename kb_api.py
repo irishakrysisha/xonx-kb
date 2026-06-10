@@ -218,8 +218,18 @@ class KB:
                        CREATED_BY: draft.get("Ким запропоновано", "agent"),
                        CREATED_AT: _now(), UPDATED_AT: _now()})
         cols = TABLES[table]["columns"]
-        self.ws(table).append_row([fields.get(c, "") for c in cols],
-                                  value_input_option="RAW")
+        # explicit placement (gspread append_row mis-detects the table when empty
+        # rows carry checkbox/validation artifacts) — write at col A, first row
+        # after the last ID-bearing row.
+        ws = self.ws(table)
+        header, _, vals = self._rows(table)
+        idcol = header.index("ID")
+        last = 1
+        for i, r in enumerate(vals[1:], start=2):
+            if len(r) > idcol and r[idcol].strip():
+                last = i
+        ws.update(f"A{last + 1}", [[fields.get(c, "") for c in cols]],
+                  value_input_option="RAW")
 
         # move any attached Drive file from _Inbox into the section folder
         fid = _file_id_from_link(draft.get("Файл", ""))
