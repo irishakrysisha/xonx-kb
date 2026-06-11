@@ -16,11 +16,13 @@ import os
 import re
 
 from kb_api import KB
-from kb_schema import (NAME_COL, SUMMARY_COL, RELATED_COL, TAXONOMY_VALUES)
+from kb_schema import (NAME_COL, SUMMARY_COL, RELATED_COL, TAXONOMY_VALUES,
+                       COLUMN_VALIDATION)
 
 CATS = TAXONOMY_VALUES["Категорія"]
 JURS = TAXONOMY_VALUES["Юрисдикція"]
 SERVICE_TYPES = TAXONOMY_VALUES["Тип послуги"]
+SPHERES = TAXONOMY_VALUES["Сфера"]
 
 # --- маркери для fallback-класифікації --------------------------------------
 _CAT_KEYWORDS = {
@@ -74,12 +76,17 @@ class Sortuvalnyk:
     # -- публічне ----------------------------------------------------------- #
     def classify(self, raw, hint_type=None):
         """Повертає {table, fields, confidence, reasons}. LLM або fallback."""
+        c = None
         if self.llm:
             try:
-                return self.llm(raw, hint_type)
+                c = self.llm(raw, hint_type)
             except Exception:
-                pass  # деградуємо до маркерів
-        return _heuristic(raw, hint_type)
+                c = None  # деградуємо до маркерів
+        if c is None:
+            c = _heuristic(raw, hint_type)
+        c["table"] = _canon_table(c.get("table", ""))  # LLM інколи дає однину
+        c["fields"] = _sanitize(c.get("fields", {}))   # списки/off-vocab від LLM
+        return c
 
     def intake(self, raw, proposed_by="sortuvalnyk", drive_link="", hint_type=None):
         """Розібрати і покласти чернетку в Inbox. Повертає (temp_id, c)."""
@@ -111,10 +118,13 @@ class Sortuvalnyk:
             if not text or not text.strip():
                 out.append((f["name"], None, "(не вдалось прочитати текст)"))
                 continue
-            tid, c = self.intake(text[:6000], proposed_by="sortuvalnyk:drive",
-                                 drive_link=f.get("webViewLink", ""))
-            out.append((f["name"], tid, f"{c['table']} (conf={c['confidence']})"))
-            self._move(f["id"], done)
+            try:
+                tid, c = self.intake(text[:6000], proposed_by="sortuvalnyk:drive",
+                                     drive_link=f.get("webViewLink", ""))
+                out.append((f["name"], tid, f"{c['table']} (conf={c['confidence']})"))
+                self._move(f["id"], done)
+            except Exception as e:
+                out.append((f["name"], None, f"ПОМИЛКА: {e}"))
         return out
 
     def _subfolder(self, parent, name):
@@ -168,6 +178,39 @@ class Sortuvalnyk:
         except Exception:
             return ""
         return ""
+
+
+# --- нормалізація назви таблиці (LLM інколи дає однину/англійською) ----------
+_TABLE_ROOTS = {"прецедент": "Прецеденти", "шаблон": "Шаблони", "templat": "Шаблони",
+                "precedent": "Прецеденти", "рісьорч": "Рісьорчі", "ресерч": "Рісьорчі",
+                "research": "Рісьорчі", "memo": "Рісьорчі", "провайдер": "Провайдери",
+                "provider": "Провайдери", "vendor": "Провайдери"}
+
+
+def _sanitize(fields):
+    """Звести значення від LLM до того, що приймає шит: списки → рядок (для
+    одно-значних дропдаунів беремо перше валідне), off-vocab значення відкидаємо."""
+    out = {}
+    for k, v in (fields or {}).items():
+        controlled = k in COLUMN_VALIDATION
+        if isinstance(v, list):
+            v = (v[0] if v else "") if controlled else ", ".join(str(x) for x in v)
+        v = "" if v is None else str(v).strip()
+        if controlled and v and v not in TAXONOMY_VALUES.get(COLUMN_VALIDATION[k], []):
+            v = ""  # off-vocab → не валимо валідацію, лишаємо порожнім
+        out[k] = v
+    return out
+
+
+def _canon_table(t):
+    t = (t or "").strip().lower()
+    for tbl in ("Прецеденти", "Шаблони", "Рісьорчі", "Провайдери"):
+        if t == tbl.lower():
+            return tbl
+    for root, tbl in _TABLE_ROOTS.items():
+        if root in t:
+            return tbl
+    return "Рісьорчі"  # безпечний дефолт
 
 
 # --- fallback-розбір ---------------------------------------------------------
@@ -278,26 +321,33 @@ def _try_llm():
         return None
     client = anthropic.Anthropic(api_key=key)
 
+    model = os.environ.get("KB_LLM_MODEL", "claude-haiku-4-5-20251001")
+
     def run(raw, hint_type=None):
         import json
         sys_prompt = (
             "Ти — сортувальник юридичної бази знань X-ON-X. Розбери кинутий артефакт "
-            "і поверни СТРОГО JSON: {\"table\": один з [Прецеденти, Шаблони, Рісьорчі, "
-            "Провайдери], \"fields\": {...}, \"confidence\": 0..1}.\n"
-            f"Категорія ∈ {CATS}.\nЮрисдикція ∈ {JURS}.\n"
-            f"Тип послуги (лише для Провайдери) ∈ {SERVICE_TYPES}.\n"
-            "Поля: Назва, 'Опис + ключові слова' (обовʼязково), Категорія, Юрисдикція; "
-            "для Рісьорчі ще 'Питання / тригер'; для Провайдери — 'Тип послуги', "
-            "'Юрисдикція / регіон', Контакти, Партнер (TRUE/FALSE)."
+            "і поверни СТРОГО один JSON-обʼєкт без пояснень:\n"
+            '{"table": <Прецеденти|Шаблони|Рісьорчі|Провайдери>, "fields": {...}, "confidence": 0..1}\n\n'
+            "Тип: Прецедент = реальний заповнений документ з кейсу; Шаблон = документ "
+            "з плейсхолдерами; Рісьорч = питання+аналіз+висновок; Провайдер = контакт "
+            "зовнішнього постачальника послуг.\n\n"
+            "fields (українські ключі рівно так):\n"
+            "- Назва — коротка людська назва, 3–8 слів (НЕ перше речення).\n"
+            "- 'Опис + ключові слова' — 1–2 речення суті + ключові слова (обовʼязкове).\n"
+            f"- Юрисдикція ∈ {JURS}.\n"
+            f"- Прецедент/Шаблон: Категорія ∈ {CATS}.\n"
+            f"- Рісьорч: 'Питання / тригер' (що досліджували) + Сфера ∈ {SPHERES}.\n"
+            f"- Провайдер: 'Тип послуги' ∈ {SERVICE_TYPES}, 'Юрисдикція / регіон' ∈ {JURS}, "
+            "Контакти, Послуги (перелік через кому), Партнер (TRUE/FALSE)."
         )
         msg = client.messages.create(
-            model="claude-opus-4-8", max_tokens=1000,
-            system=sys_prompt,
-            messages=[{"role": "user", "content": raw}])
+            model=model, max_tokens=900, system=sys_prompt,
+            messages=[{"role": "user", "content": raw[:8000]}])
         txt = msg.content[0].text
         data = json.loads(txt[txt.index("{"):txt.rindex("}") + 1])
-        data.setdefault("confidence", 0.8)
-        data["reasons"] = ["LLM (claude-opus-4-8)"]
+        data.setdefault("confidence", 0.85)
+        data["reasons"] = [f"LLM ({model})"]
         return data
 
     return run
