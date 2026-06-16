@@ -204,7 +204,7 @@ class KB:
         або згодом clear_pii()). Решта типів — одразу 'active'.
         """
         row_i, draft = self._inbox_locate(temp_id)
-        if draft["Статус ревʼю"] == "approved":
+        if draft.get("Result_ID", "").strip():
             raise KBError(f"{temp_id} already promoted as {draft['Result_ID']}")
         table = draft["Цільова полиця"]
         if table == "Прецеденти" and status == "active" and not pii_ok:
@@ -251,6 +251,36 @@ class KB:
         self._inbox_set(row_i, {"Статус ревʼю": "approved", "Рецензент": reviewer,
                                 "Result_ID": new_id})
         return new_id
+
+    # значення в колонці «Статус ревʼю», які означають «ОК, у каталог»
+    _APPROVE_WORDS = {"approved", "ok", "ок", "так", "yes", "✓", "✔", "+"}
+
+    def promote_approved(self, reviewer_default="review", pii_ok=False):
+        """Перенести в каталог усі чернетки Inbox, позначені як ОК.
+
+        Людина у вкладці Inbox ставить «Статус ревʼю» = approved (або «ок»);
+        цей метод знаходить такі рядки (де ще нема Result_ID) і promote-ить їх.
+        Повертає список (Temp_ID, новий ID | помилка). Викликається денною рутіною.
+        """
+        vals = self.ws(INBOX).get_all_values()
+        ti = INBOX_COLUMNS.index("Temp_ID")
+        si = INBOX_COLUMNS.index("Статус ревʼю")
+        ri = INBOX_COLUMNS.index("Result_ID")
+        rvi = INBOX_COLUMNS.index("Рецензент")
+        out = []
+        for r in vals[1:]:
+            if len(r) <= ti or not r[ti].strip():
+                continue
+            status = (r[si] if len(r) > si else "").strip().lower()
+            result = (r[ri] if len(r) > ri else "").strip()
+            if result or status not in self._APPROVE_WORDS:
+                continue
+            reviewer = (r[rvi] if len(r) > rvi else "").strip() or reviewer_default
+            try:
+                out.append((r[ti], self.promote(r[ti], reviewer=reviewer, pii_ok=pii_ok)))
+            except KBError as e:
+                out.append((r[ti], f"ERROR: {e}"))
+        return out
 
     def reject(self, temp_id, reviewer, notes=""):
         row_i, _ = self._inbox_locate(temp_id)
