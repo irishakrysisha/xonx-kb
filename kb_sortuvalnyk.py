@@ -331,15 +331,37 @@ def _heuristic(raw, hint_type=None):
             "reasons": reasons}
 
 
+def _clean(text):
+    """Прибрати шум: плейсхолдери, підкреслення, маркери сторінок/слайдів,
+    схлопнути підряд продубльовані слова (типовий артефакт PDF-екстракції)."""
+    s = re.sub(r"\s+", " ", text or "").strip()
+    s = _PLACEHOLDER_RE.sub(" ", s)            # [Клієнт A], <ВИКОНАВЕЦЬ>, {{x}}
+    s = re.sub(r"_{2,}", " ", s)               # ____ підкреслення-заглушки
+    s = re.sub(r"\(\s*\d+\s*/\s*\d+\s*\)", " ", s)   # (1/3), (1 / 2) — слайди
+    s = re.sub(r"\b(\w{3,})(\s+\1\b)+", r"\1", s, flags=re.IGNORECASE)  # дубль слів
+    return re.sub(r"\s+", " ", s).strip(" .;:-—")
+
+
+def _is_shouty(x):
+    letters = [c for c in x if c.isalpha()]
+    return bool(letters) and sum(c.isupper() for c in letters) / len(letters) > 0.7
+
+
 def _summarise(text):
-    s = re.sub(r"\s+", " ", text).strip()
-    first = re.split(r"(?<=[.!?])\s", s)[0]
-    out = first if len(first) >= 30 else s
-    return (out[:300]).strip()
+    s = _clean(text)
+    sents = re.split(r"(?<=[.!?])\s", s)
+    # перше змістовне речення, що не є ALL-CAPS «шапкою» документа
+    pick = next((x for x in sents if len(x) >= 30 and not _is_shouty(x)), s)
+    return pick[:300].strip()
 
 
 def _title(text):
-    s = re.sub(r"\s+", " ", text).strip()
+    s = _clean(text)
+    # не беремо ALL-CAPS бланк як назву — шукаємо перше «нормальне» речення
+    for part in re.split(r"(?<=[.!?])\s", s):
+        if len(part) >= 12 and not _is_shouty(part):
+            s = part
+            break
     return s[:70] + ("…" if len(s) > 70 else "")
 
 
