@@ -231,17 +231,9 @@ class KB:
         ws.update(f"A{last + 1}", [[fields.get(c, "") for c in cols]],
                   value_input_option="RAW")
 
-        # move any attached Drive file from _Inbox into the section folder
-        fid = _file_id_from_link(draft.get("Файл", ""))
-        if fid and fid != draft.get("Файл"):
-            try:
-                meta = self.drive.files().get(fileId=fid, fields="parents").execute()
-                self.drive.files().update(
-                    fileId=fid, addParents=self.cfg["folders"][SECTION_OF[table]],
-                    removeParents=",".join(meta.get("parents", [])),
-                    fields="id").execute()
-            except Exception:
-                pass  # link may be an external URL, not a Drive file
+        # файл лишається там, де його поклав sortuvalnyk (_processed); каталог
+        # просто посилається на нього через поле «Файл». Окремих секційних
+        # папок нема — тип картки задає сам каталог.
 
         # write back any pre-existing links bidirectionally
         for rid in [x.strip() for x in fields.get(RELATED_COL, "").split(",") if x.strip()]:
