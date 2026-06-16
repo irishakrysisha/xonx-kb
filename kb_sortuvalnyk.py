@@ -20,7 +20,8 @@ from kb_schema import (NAME_COL, SUMMARY_COL, RELATED_COL, TAXONOMY_VALUES,
                        COLUMN_VALIDATION)
 
 CATS = TAXONOMY_VALUES["Категорія"]
-JURS = TAXONOMY_VALUES["Юрисдикція"]
+LAWS = TAXONOMY_VALUES["Право"]          # governing law (документи/рісьорчі)
+JURS = TAXONOMY_VALUES["Юрисдикція"]     # регіон провайдера
 SERVICE_TYPES = TAXONOMY_VALUES["Тип послуги"]
 SPHERES = TAXONOMY_VALUES["Сфера"]
 DOCTYPES = TAXONOMY_VALUES["Тип документа"]
@@ -49,6 +50,7 @@ _SPHERE_KEYWORDS = {
     "Міжнародне":              ["конвенц", "подвійн оподаткув", "brussels", "hague", "міжнародн", "транскордон"],
     "Договірне":               ["договір", "угод", "nda", "клоз", "контракт"],
 }
+# РЕГІОН провайдера (де працює) — з містами
 _JUR_TOKENS = {
     "UA-Київ": ["київ", "kyiv", "kiev"],
     "UA-Львів": ["львів", "lviv"],
@@ -62,6 +64,22 @@ _JUR_TOKENS = {
     "UAE": ["оае", "uae", "dubai", "дубай", "emirates"],
     "CY": ["кіпр", "cyprus"],
     "EE": ["естон", "estonia", "tallinn"],
+}
+# ПРАВО, що регулює (governing law) — правові системи, міста зводимо до країни.
+# Фрази «governed by … law» / «право …» дають найсильніший сигнал.
+_LAW_TOKENS = {
+    "UA": ["право україн", "законодавств україн", "за правом україн", "україн",
+           "київ", "львів", "кзпп", "цку", "пку", "+380"],
+    "DE": ["german law", "право німеч", "за правом німеч", "німеч", "deutsch", "bgb"],
+    "UK": ["english law", "law of england", "laws of england", "england and wales",
+           "за правом англі", "право англі", "british", "британ", "england"],
+    "US-DE": ["delaware law", "law of delaware", "dgcl", "delaware"],
+    "US": ["new york law", "laws of new york", "право сша", "united states", "сша"],
+    "EU": ["eu law", "право єс", "європейськ законодавств", "gdpr"],
+    "PL": ["polish law", "право польщ", "за правом польщ", "польщ", "poland"],
+    "UAE": ["uae law", "право оае", "difc", "оае", "dubai law"],
+    "CY": ["cyprus law", "право кіпр", "кіпр", "cyprus"],
+    "EE": ["estonian law", "право естон", "естон", "estonia"],
 }
 _SERVICE_KEYWORDS = {
     "Нотаріус":                       ["нотар", "notary"],
@@ -304,25 +322,26 @@ def _heuristic(raw, hint_type=None):
     title = _title(text)
     fields = {NAME_COL: title, SUMMARY_COL: summary}
 
-    # 3) юрисдикція
-    jur = _detect_one(low, _JUR_TOKENS) or "UA"
-    reasons.append(f"юрисдикція: {jur}")
+    # 3) право (governing law) — для документів/рісьорчів; регіон — для провайдерів
+    law = _detect_one(low, _LAW_TOKENS) or "UA"
+    region = _detect_one(low, _JUR_TOKENS) or "UA"
 
     if table == "Провайдери":
         svc = _detect_one(low, _SERVICE_KEYWORDS) or "Сервіс-провайдер"
-        fields.update({"Тип послуги": svc, "Юрисдикція / регіон": jur,
+        fields.update({"Тип послуги": svc, "Юрисдикція / регіон": region,
                        "Контакти": _contacts(text), "Партнер": "FALSE"})
-        reasons.append(f"тип послуги: {svc}")
+        reasons.append(f"тип послуги: {svc}; регіон: {region}")
     elif table == "Рісьорчі":
         sph = _detect_one(low, _SPHERE_KEYWORDS) or "Договірне"
         form = _detect_one(low, _FORM_KEYWORDS) or ("Q&A" if is_qa else "Меморандум")
-        fields.update({"Сфера": sph, "Форма": form, "Юрисдикція": jur,
+        fields.update({"Сфера": sph, "Форма": form, "Право": law,
                        "Питання / тригер": _question(text)})
-        reasons.append(f"сфера: {sph}; форма: {form}")
+        reasons.append(f"сфера: {sph}; форма: {form}; право: {law}")
     else:  # Прецеденти / Шаблони — документні категорії за типом відносин
         cat = _detect_cat(low) or "Договірні"
         dtype = dtype_guess or ""
-        fields.update({"Категорія": cat, "Тип документа": dtype, "Юрисдикція": jur})
+        fields.update({"Категорія": cat, "Тип документа": dtype, "Право": law})
+        reasons.append(f"право: {law}")
         reasons.append(f"категорія: {cat}" + (f"; тип документа: {dtype}" if dtype else ""))
 
     # 4) впевненість: скільки сигналів спрацювало
@@ -420,13 +439,14 @@ def _try_llm():
             "fields (українські ключі рівно так):\n"
             "- Назва — коротка людська назва, 3–8 слів (НЕ перше речення).\n"
             "- Опис — 1–2 речення суті + ключові слова (обовʼязкове).\n"
-            f"- Юрисдикція ∈ {JURS}.\n"
             f"- Прецедент/Шаблон: Категорія (тип відносин) ∈ {CATS}; "
-            f"'Тип документа' (підтип) ∈ {DOCTYPES}.\n"
+            f"'Тип документа' (підтип) ∈ {DOCTYPES}; "
+            f"Право (governing law — яке право регулює документ) ∈ {LAWS}.\n"
             f"- Рісьорч: 'Питання / тригер' (що досліджували) + Сфера ∈ {SPHERES} "
-            f"+ Форма ∈ {FORMS}.\n"
-            f"- Провайдер: 'Тип послуги' ∈ {SERVICE_TYPES}, 'Юрисдикція / регіон' ∈ {JURS}, "
-            "Контакти, Послуги (перелік через кому), Партнер (TRUE/FALSE)."
+            f"+ Форма ∈ {FORMS} + Право (яке право аналізується) ∈ {LAWS}.\n"
+            f"- Провайдер: 'Тип послуги' ∈ {SERVICE_TYPES}, 'Юрисдикція / регіон' "
+            f"(де працює, можна місто) ∈ {JURS}, Контакти, Послуги (перелік через "
+            "кому), Партнер (TRUE/FALSE)."
         )
         msg = client.messages.create(
             model=model, max_tokens=900, system=sys_prompt,

@@ -47,14 +47,17 @@ def main():
         new_cols = spec["columns"]
         vals = ws.get_all_values()
         old_header = vals[0] if vals else []
-        # перекласти кожен наявний рядок у нову розкладку колонок за назвою
+        # перекласти кожен наявний рядок у нову розкладку колонок за назвою;
+        # ALIAS = перейменовані колонки (нова назва → стара, звідки тягнути дані)
+        ALIAS = {"Право": "Юрисдикція"}
         records = []
         for row in vals[1:]:
             if not any(c.strip() for c in row):
                 continue
             rec = {old_header[i]: (row[i] if i < len(row) else "")
                    for i in range(len(old_header))}
-            records.append([rec.get(c, "") for c in new_cols])
+            records.append([rec.get(c) or rec.get(ALIAS.get(c, ""), "")
+                            for c in new_cols])
 
         ncols_old = max(len(old_header), len(new_cols))
         ws.batch_clear([f"A1:{_col(ncols_old + 2)}1000"])
