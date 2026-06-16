@@ -287,6 +287,26 @@ class KB:
         self._inbox_set(row_i, {"Статус ревʼю": "rejected", "Рецензент": reviewer,
                                 "Нотатки": notes})
 
+    def delete(self, rec_id):
+        """Видалити картку з каталогу: прибрати зворотні посилання й рядок.
+
+        Незворотно. Файл у Drive НЕ чіпаємо (каталог лише посилається на нього).
+        """
+        table, row_i, _, rec = self._locate(rec_id)
+        for rid in [x.strip() for x in rec.get(RELATED_COL, "").split(",") if x.strip()]:
+            try:
+                self._remove_link_side(rid, rec_id)
+            except KBError:
+                pass
+        self.ws(table).delete_rows(row_i)
+        return rec_id
+
+    def _remove_link_side(self, rec_id, other_id):
+        table, row_i, header, rec = self._locate(rec_id)
+        cur = [x.strip() for x in rec.get(RELATED_COL, "").split(",") if x.strip()]
+        cur = [x for x in cur if x != other_id]
+        self.ws(table).update_cell(row_i, header.index(RELATED_COL) + 1, ", ".join(cur))
+
     def clear_pii(self, rec_id):
         """Підтвердити, що PII прибрано: pending-PII → active."""
         _, _, _, rec = self._locate(rec_id)
