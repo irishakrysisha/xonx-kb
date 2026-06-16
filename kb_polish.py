@@ -14,7 +14,8 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "sheets"))
 import brand_palette as bp
 
 from kb_api import KB
-from kb_schema import TABLES, HIDDEN_COLUMNS, SUMMARY_COL, CHECKBOX_COLUMNS
+from kb_schema import (TABLES, HIDDEN_COLUMNS, SUMMARY_COL, CHECKBOX_COLUMNS,
+                       TAXONOMY, TAXONOMY_VALUES, INBOX, INBOX_COLUMNS)
 
 # чистий «людський» вигляд: лишаємо видимим лише суттєве, решту ховаємо
 # (дані не зникають — лишаються для пошуку/AI, просто не муляють)
@@ -51,6 +52,58 @@ RATING_COLORS = {
     "Okay": (bp.WARM, bp.TEXT_SEC),
     "Avoid": (bp.PINK_BG, bp.PINK_TEXT),
 }
+
+
+def _header_req(sid, ncols):
+    """Шапка таблиці — графіт, жирний кремовий Inter (єдиний стиль усюди)."""
+    return {"repeatCell": {
+        "range": {"sheetId": sid, "startRowIndex": 0, "endRowIndex": 1,
+                  "startColumnIndex": 0, "endColumnIndex": ncols},
+        "cell": {"userEnteredFormat": {
+            "backgroundColor": bp.GRAPHITE, "verticalAlignment": "MIDDLE",
+            "wrapStrategy": "WRAP", "padding": {"left": 8, "top": 4, "bottom": 4, "right": 4},
+            "textFormat": {"bold": True, "foregroundColor": bp.CREAM,
+                           "fontSize": 10, "fontFamily": "Inter"}}},
+        "fields": "userEnteredFormat(backgroundColor,verticalAlignment,wrapStrategy,padding,textFormat)"}}
+
+
+def _clear_below(sid, nrows, ncols):
+    """Прибрати будь-яке форматування нижче даних (білий фон, без бордюрів)."""
+    reqs = [{"repeatCell": {
+        "range": {"sheetId": sid, "startRowIndex": max(nrows, 1), "endRowIndex": 1000,
+                  "startColumnIndex": 0, "endColumnIndex": ncols + 2},
+        "cell": {"userEnteredFormat": {
+            "backgroundColor": bp.rgb("#FFFFFF"),
+            "textFormat": {"fontFamily": "Inter", "foregroundColor": bp.TEXT}}},
+        "fields": "userEnteredFormat(backgroundColor,textFormat)"}},
+        {"updateBorders": {
+            "range": {"sheetId": sid, "startRowIndex": max(nrows, 1), "endRowIndex": 1000,
+                      "startColumnIndex": 0, "endColumnIndex": ncols + 2},
+            "top": {"style": "NONE"}, "bottom": {"style": "NONE"},
+            "left": {"style": "NONE"}, "right": {"style": "NONE"},
+            "innerHorizontal": {"style": "NONE"}, "innerVertical": {"style": "NONE"}}}]
+    return reqs
+
+
+def _style_reference(ws, cols, widths=None, freeze_col=False):
+    """Шапка+тіло+бордюри+ширини+заморозка для довідкових вкладок (_Taxonomy / Inbox)."""
+    vals = ws.get_all_values()
+    sid = ws.id
+    ncols = len(cols)
+    nrows = sum(1 for r in vals[1:] if any(c.strip() for c in r)) + 1
+    reqs = [_header_req(sid, ncols), bp.data_rows_req(sid, 1, max(nrows, 2), ncols),
+            bp.border_req(sid, 0, nrows, ncols)]
+    reqs += _clear_below(sid, nrows, ncols)
+    for idx, c in enumerate(cols):
+        reqs.append({"updateDimensionProperties": {
+            "range": {"sheetId": sid, "dimension": "COLUMNS",
+                      "startIndex": idx, "endIndex": idx + 1},
+            "properties": {"pixelSize": (widths or {}).get(c, 150)}, "fields": "pixelSize"}})
+    reqs.append({"updateSheetProperties": {
+        "properties": {"sheetId": sid, "gridProperties": {
+            "frozenRowCount": 1, "frozenColumnCount": 1 if freeze_col else 0}},
+        "fields": "gridProperties(frozenRowCount,frozenColumnCount)"}})
+    return reqs, [c for c in cols]
 
 
 def _cf_rule(sid, ci, value, bg, fg):
@@ -91,6 +144,12 @@ def main():
         _, cnt = cf_counts.get(name, (sid, 0))
         for i in range(cnt - 1, -1, -1):
             reqs.append({"deleteConditionalFormatRule": {"sheetId": sid, "index": i}})
+
+        # 0b) єдиний базовий стиль: графіт-шапка + кремове тіло + чистка нижче даних
+        #     (важливо після міграції — колонки зсунулись, формат був позиційний)
+        reqs.append(_header_req(sid, len(cols)))
+        reqs.append(bp.data_rows_req(sid, 1, max(nrows, 2), len(cols)))
+        reqs += _clear_below(sid, nrows, len(cols))
 
         # 1) ширини + ховання службових (глобальні + пер-вкладкові)
         hide = HIDDEN_COLUMNS | EXTRA_HIDDEN.get(name, set())
@@ -154,6 +213,25 @@ def main():
 
         vis = [c for c in cols if c not in hide]
         print(f"{name}: brand style applied | visible: {vis}")
+
+    # --- довідкові вкладки: _Taxonomy + Inbox (теж у фірмовому стилі) ---
+    tax_w = {"Тип документа": 240, "Тип послуги": 230, "Сфера": 180,
+             "Цільова полиця": 130, "Категорія": 170, "Юрисдикція": 110,
+             "Форма": 140, "Оцінка": 130, "Статус": 130, "Статус ревʼю": 130}
+    tax_reqs, tax_cols = _style_reference(
+        kb.ss.worksheet(TAXONOMY), list(TAXONOMY_VALUES.keys()),
+        widths=tax_w, freeze_col=False)
+    kb.ss.batch_update({"requests": tax_reqs})
+    print(f"_Taxonomy: brand style applied | {len(tax_cols)} колонок")
+
+    inbox_w = dict(WIDTHS); inbox_w.update(
+        {"Temp_ID": 90, "Цільова полиця": 120, "Опис": 360, "Деталі_JSON": 220,
+         "Ким запропоновано": 140, "Коли": 150, "Рецензент": 110, "Нотатки": 200,
+         "Result_ID": 90})
+    in_reqs, _ = _style_reference(kb.ss.worksheet(INBOX), INBOX_COLUMNS,
+                                  widths=inbox_w, freeze_col=True)
+    kb.ss.batch_update({"requests": in_reqs})
+    print("Inbox: brand style applied")
 
     print("DONE — KB у фірмовому стилі")
 
