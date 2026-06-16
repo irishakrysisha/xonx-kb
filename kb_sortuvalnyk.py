@@ -82,7 +82,7 @@ _DOCTYPE_KEYWORDS = {
     "Договір (сервісний)":        ["договір про надання послуг", "сервісн договір", "service agreement"],
     "Договір (фандінг)":          ["фандінг", "funding agreement", "грант договір"],
     "Договір (комерційний)":      ["договір постач", "договір купівл", "supply agreement", "комерційн договір"],
-    "MOU / LoI":                  ["mou", "loi", "letter of intent", "memorandum of understanding", "меморандум про намір"],
+    "MOU / LoI":                  [" mou ", " loi ", "letter of intent", "memorandum of understanding", "меморандум про намір"],
     "Term sheet":                 ["term sheet", "термшит"],
     "Ліцензійний договір":        ["ліцензійн", "license agreement", "ліценз договір"],
     "Amendment / дод. угода":     ["amendment", "додаткова угода", "дод. угода", "допугод"],
@@ -90,10 +90,10 @@ _DOCTYPE_KEYWORDS = {
     "Статут / установчі":         ["статут", "установч документ", "articles of association", "charter"],
     "Рішення засновника / протокол": ["рішення засновник", "протокол збор", "shareholder resolution", "board minutes"],
     "Корп. зміни / реорганізація": ["реорганіз", "злиття", "поділ", "merger", "корпоративн зміни"],
-    "Довіреність":                ["довірен", "power of attorney", "poa"],
-    "SAFE / convertible":         ["safe", "convertible note", "конвертован"],
-    "SHA":                        ["sha", "shareholders agreement", "акціонерн угод", "корпоративн договір"],
-    "SPA":                        ["spa", "share purchase", "купівлі-продажу частк", "купівлі-продажу акці"],
+    "Довіреність":                ["довірен", "power of attorney", " poa "],
+    "SAFE / convertible":         [" safe ", "convertible note", "конвертован"],
+    "SHA":                        [" sha ", "shareholders agreement", "акціонерн угод", "корпоративн договір"],
+    "SPA":                        [" spa ", "share purchase", "купівлі-продажу частк", "купівлі-продажу акці"],
     "Subscription agreement":     ["subscription agreement", "договір підписк"],
     "Side letter":                ["side letter", "сайд-лист"],
     "Vesting agreement":          ["vesting", "вестинг"],
@@ -282,6 +282,7 @@ def _heuristic(raw, hint_type=None):
     is_qa = ("?" in text or "питанн" in low) and any(
         w in low for w in ["висновок", "аналіз", "тому", "отже", "позиці"])
     short = len(text) < 240
+    dtype_guess = _detect_one(low, _DOCTYPE_KEYWORDS)
 
     if hint_type in ("Прецеденти", "Шаблони", "Рісьорчі", "Провайдери"):
         table = hint_type; reasons.append(f"тип задано: {hint_type}")
@@ -291,6 +292,9 @@ def _heuristic(raw, hint_type=None):
         table = "Шаблони"; reasons.append("плейсхолдери → шаблон")
     elif is_qa:
         table = "Рісьорчі"; reasons.append("питання + аналіз/висновок → рісьорч")
+    elif dtype_guess:
+        # реальний заповнений документ відомого типу (без плейсхолдерів) → прецедент
+        table = "Прецеденти"; reasons.append(f"тип документа «{dtype_guess}» без плейсхолдерів → прецедент")
     else:
         table = "Рісьорчі"; reasons.append("за замовч.: інсайт-рісьорч")
 
@@ -317,7 +321,7 @@ def _heuristic(raw, hint_type=None):
         reasons.append(f"сфера: {sph}; форма: {form}")
     else:  # Прецеденти / Шаблони — документні категорії за типом відносин
         cat = _detect_cat(low) or "Договірні"
-        dtype = _detect_one(low, _DOCTYPE_KEYWORDS) or ""
+        dtype = dtype_guess or ""
         fields.update({"Категорія": cat, "Тип документа": dtype, "Юрисдикція": jur})
         reasons.append(f"категорія: {cat}" + (f"; тип документа: {dtype}" if dtype else ""))
 
