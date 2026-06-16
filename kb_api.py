@@ -161,8 +161,13 @@ class KB:
         return out
 
     # -- write: intake ------------------------------------------------------ #
-    def propose(self, table, fields, drive_link="", proposed_by="agent", details=None):
-        """Add a draft to the Inbox. Returns the Temp_ID."""
+    def propose(self, table, fields, drive_link="", proposed_by="agent", details=None,
+                note=""):
+        """Add a draft to the Inbox. Returns the Temp_ID.
+
+        `note` — службова нотатка від сортувальника (впевненість + на що
+        звернути увагу при рев'ю); лягає в колонку «Нотатки».
+        """
         if table not in TABLES:
             raise KBError(f"unknown table {table!r}")
         self._validate(table, fields)
@@ -177,7 +182,7 @@ class KB:
             "Деталі_JSON": json.dumps(details or fields, ensure_ascii=False),
             RELATED_COL: fields.get(RELATED_COL, ""),
             "Ким запропоновано": proposed_by, "Коли": _now(),
-            "Статус ревʼю": "pending", "Рецензент": "", "Нотатки": "", "Result_ID": "",
+            "Статус ревʼю": "pending", "Рецензент": "", "Нотатки": note, "Result_ID": "",
         }
         inbox.append_row([row.get(c, "") for c in INBOX_COLUMNS],
                          value_input_option="RAW")
