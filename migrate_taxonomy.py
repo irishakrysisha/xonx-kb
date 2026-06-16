@@ -12,7 +12,7 @@
 """
 from kb_api import KB
 from kb_schema import (TABLES, TAXONOMY, TAXONOMY_VALUES, INBOX, INBOX_COLUMNS,
-                       COLUMN_VALIDATION)
+                       COLUMN_VALIDATION, SOFT_DROPDOWNS)
 
 
 def _clear_validation(sid, ncols):
@@ -25,7 +25,7 @@ def _clear_validation(sid, ncols):
 def _validation(sid, cols):
     reqs = []
     for idx, c in enumerate(cols):
-        key = COLUMN_VALIDATION.get(c)
+        key = COLUMN_VALIDATION.get(c) or SOFT_DROPDOWNS.get(c)
         if not key:
             continue
         vals = TAXONOMY_VALUES[key]
