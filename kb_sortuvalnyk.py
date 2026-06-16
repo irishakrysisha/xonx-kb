@@ -23,6 +23,8 @@ CATS = TAXONOMY_VALUES["Категорія"]
 JURS = TAXONOMY_VALUES["Юрисдикція"]
 SERVICE_TYPES = TAXONOMY_VALUES["Тип послуги"]
 SPHERES = TAXONOMY_VALUES["Сфера"]
+DOCTYPES = TAXONOMY_VALUES["Тип документа"]
+FORMS = TAXONOMY_VALUES["Форма"]
 
 # --- маркери для fallback-класифікації --------------------------------------
 _CAT_KEYWORDS = {
@@ -48,21 +50,76 @@ _SPHERE_KEYWORDS = {
     "Договірне":               ["договір", "угод", "nda", "клоз", "контракт"],
 }
 _JUR_TOKENS = {
-    "UA": ["україн", "київ", "ukrain", "ua", "+380"],
+    "UA-Київ": ["київ", "kyiv", "kiev"],
+    "UA-Львів": ["львів", "lviv"],
+    "UA": ["україн", "ukrain", "+380"],
     "DE": ["німеч", "germany", "deutsch", "münchen", "munich", "berlin", " de "],
     "UK": ["британ", "london", "united kingdom", " uk "],
     "EU": ["європ", "brussels", "eu ", "brussels ia"],
-    "US-DE": ["delaware", " us", "сша", "united states"],
+    "US-DE": ["delaware"],
+    "US": [" us", "сша", "united states"],
+    "PL": ["польщ", "poland", "warsaw", "варшав"],
+    "UAE": ["оае", "uae", "dubai", "дубай", "emirates"],
+    "CY": ["кіпр", "cyprus"],
+    "EE": ["естон", "estonia", "tallinn"],
 }
 _SERVICE_KEYWORDS = {
-    "Нотаріус":               ["нотар", "notary"],
-    "Перекладач":             ["переклад", "translat"],
-    "Зовнішній юрист":        ["юрист", "counsel", "law firm", "адвокат", "partner"],
-    "Айпішник":               ["патент", "ip ", "trademark", "айпі"],
-    "Аудитор":                ["аудит", "audit"],
-    "Податковий консультант": ["податков", "tax advis", "tax consult"],
-    "Сервіс-провайдер":       ["реєстрац", "апостиль", "легаліз", "подач"],
-    "Індустріальний":         ["логіст", "ріелтор", "банкір", "broker"],
+    "Нотаріус":                       ["нотар", "notary"],
+    "Перекладач":                     ["переклад", "translat"],
+    "Зовнішній юрист":                ["юрист", "counsel", "law firm", "адвокат", "attorney"],
+    "Айпішник / патентний повірений": ["патент", "trademark", "айпі", "торгов марк", "патентн повірен"],
+    "Аудитор":                        ["аудит", "audit"],
+    "Податковий консультант":         ["податков консульт", "tax advis", "tax consult"],
+    "Сервіс-провайдер":               ["реєстрац", "апостиль", "легаліз", "подач"],
+    "Логіст":                         ["логіст", "logistic", "перевез", "freight", "митн брокер"],
+    "Ріелтор":                        ["ріелтор", "realtor", "нерухом", "real estate"],
+    "Інвестбанкір":                   ["інвестбанк", "investment bank", "m&a advis", "банкір"],
+    "Індустріальний (інше)":          ["індустріальн", "галузев"],
+}
+# тип документа для прецедентів/шаблонів (підтип усередині категорії)
+_DOCTYPE_KEYWORDS = {
+    "NDA":                        ["nda", "про нерозголош", "non-disclosure", "конфіденційн"],
+    "Договір (сервісний)":        ["договір про надання послуг", "сервісн договір", "service agreement"],
+    "Договір (фандінг)":          ["фандінг", "funding agreement", "грант договір"],
+    "Договір (комерційний)":      ["договір постач", "договір купівл", "supply agreement", "комерційн договір"],
+    "MOU / LoI":                  ["mou", "loi", "letter of intent", "memorandum of understanding", "меморандум про намір"],
+    "Term sheet":                 ["term sheet", "термшит"],
+    "Ліцензійний договір":        ["ліцензійн", "license agreement", "ліценз договір"],
+    "Amendment / дод. угода":     ["amendment", "додаткова угода", "дод. угода", "допугод"],
+    "RFP / пропозиція":           ["rfp", "комерційна пропозиц", "request for proposal", "тендерн"],
+    "Статут / установчі":         ["статут", "установч документ", "articles of association", "charter"],
+    "Рішення засновника / протокол": ["рішення засновник", "протокол збор", "shareholder resolution", "board minutes"],
+    "Корп. зміни / реорганізація": ["реорганіз", "злиття", "поділ", "merger", "корпоративн зміни"],
+    "Довіреність":                ["довірен", "power of attorney", "poa"],
+    "SAFE / convertible":         ["safe", "convertible note", "конвертован"],
+    "SHA":                        ["sha", "shareholders agreement", "акціонерн угод", "корпоративн договір"],
+    "SPA":                        ["spa", "share purchase", "купівлі-продажу частк", "купівлі-продажу акці"],
+    "Subscription agreement":     ["subscription agreement", "договір підписк"],
+    "Side letter":                ["side letter", "сайд-лист"],
+    "Vesting agreement":          ["vesting", "вестинг"],
+    "Cap table":                  ["cap table", "капіталізаційн табл"],
+    "Put & Call option":          ["put option", "call option", "put&call", "опціон put", "опціон call"],
+    "Трудовий договір":           ["трудовий договір", "employment agreement", "контракт з працівник"],
+    "ЦПД":                        ["цпд", "цивільно-правов", "договір з фоп", "gig contract"],
+    "Наказ":                      ["наказ"],
+    "ESOP / опціони":             ["esop", "опціонн план", "option plan", "опціонн програм"],
+    "Privacy policy":             ["privacy policy", "політика конфіденційн"],
+    "Cookie policy":              ["cookie policy", "політика cookie", "політика куки"],
+    "IP policy":                  ["ip policy", "політика інтелектуальн"],
+    "DPA / GDPR":                 ["dpa", "gdpr", "data processing", "обробк персональн дан"],
+    "Претензія / demand":         ["претензі", "demand letter", "вимога про"],
+    "Запит / відповідь":          ["запит", "відповідь на запит", "request and response"],
+    "Звернення в держорган":      ["звернення", "заява до держ", "лист до держоргану"],
+    "Позов / апеляція":           ["позов", "апеляц", "касац", "claim form", "позовн заяв"],
+    "Заперечення на акт":         ["заперечення на акт", "оскарж акт", "відповідь на акт податков"],
+}
+# форма рісьорчу
+_FORM_KEYWORDS = {
+    "Меморандум":     ["меморандум", "memorandum", "аналітичн записк", "memo"],
+    "Огляд практики": ["огляд судов практик", "судов практик", "огляд практики", "case law review"],
+    "Огляд змін":     ["огляд змін", "зміни законодавств", "законодавч новел", "legislative update"],
+    "Lifehack":       ["лайфхак", "lifehack", "фішк", "практичн рад"],
+    "Q&A":            ["q&a", "питання-відповідь", "коротке питанн"],
 }
 _CONTACT_RE = re.compile(r"(\+?\d[\d\s()\-]{6,}\d)|([\w.\-]+@[\w.\-]+\.\w+)")
 _PLACEHOLDER_RE = re.compile(r"\[[^\]]{1,40}\]|_{3,}|\{\{.*?\}\}|<[A-ZА-ЯІЇЄ_ ]{2,}>")
@@ -254,13 +311,15 @@ def _heuristic(raw, hint_type=None):
         reasons.append(f"тип послуги: {svc}")
     elif table == "Рісьорчі":
         sph = _detect_one(low, _SPHERE_KEYWORDS) or "Договірне"
-        fields.update({"Сфера": sph, "Юрисдикція": jur,
+        form = _detect_one(low, _FORM_KEYWORDS) or ("Q&A" if is_qa else "Меморандум")
+        fields.update({"Сфера": sph, "Форма": form, "Юрисдикція": jur,
                        "Питання / тригер": _question(text)})
-        reasons.append(f"сфера: {sph}")
+        reasons.append(f"сфера: {sph}; форма: {form}")
     else:  # Прецеденти / Шаблони — документні категорії за типом відносин
         cat = _detect_cat(low) or "Договірні"
-        fields.update({"Категорія": cat, "Юрисдикція": jur})
-        reasons.append(f"категорія: {cat}")
+        dtype = _detect_one(low, _DOCTYPE_KEYWORDS) or ""
+        fields.update({"Категорія": cat, "Тип документа": dtype, "Юрисдикція": jur})
+        reasons.append(f"категорія: {cat}" + (f"; тип документа: {dtype}" if dtype else ""))
 
     # 4) впевненість: скільки сигналів спрацювало
     has_class = _detect_cat(low) is not None or _detect_one(low, _SPHERE_KEYWORDS) is not None
@@ -336,8 +395,10 @@ def _try_llm():
             "- Назва — коротка людська назва, 3–8 слів (НЕ перше речення).\n"
             "- Опис — 1–2 речення суті + ключові слова (обовʼязкове).\n"
             f"- Юрисдикція ∈ {JURS}.\n"
-            f"- Прецедент/Шаблон: Категорія ∈ {CATS}.\n"
-            f"- Рісьорч: 'Питання / тригер' (що досліджували) + Сфера ∈ {SPHERES}.\n"
+            f"- Прецедент/Шаблон: Категорія (тип відносин) ∈ {CATS}; "
+            f"'Тип документа' (підтип) ∈ {DOCTYPES}.\n"
+            f"- Рісьорч: 'Питання / тригер' (що досліджували) + Сфера ∈ {SPHERES} "
+            f"+ Форма ∈ {FORMS}.\n"
             f"- Провайдер: 'Тип послуги' ∈ {SERVICE_TYPES}, 'Юрисдикція / регіон' ∈ {JURS}, "
             "Контакти, Послуги (перелік через кому), Партнер (TRUE/FALSE)."
         )
