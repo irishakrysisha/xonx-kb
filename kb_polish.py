@@ -14,17 +14,22 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "sheets"))
 import brand_palette as bp
 
 from kb_api import KB
-from kb_schema import TABLES, HIDDEN_COLUMNS, SUMMARY_COL
+from kb_schema import TABLES, HIDDEN_COLUMNS, SUMMARY_COL, CHECKBOX_COLUMNS
 
-# службові, що ховаються лише на окремих вкладках
-# (у провайдерів Опис дублює Послуги — ховаємо з очей, лишаємо для пошуку)
-EXTRA_HIDDEN = {"Провайдери": {SUMMARY_COL}}
+# чистий «людський» вигляд: лишаємо видимим лише суттєве, решту ховаємо
+# (дані не зникають — лишаються для пошуку/AI, просто не муляють)
+EXTRA_HIDDEN = {
+    "Прецеденти": {"Перевірений локалом", "Власник", "Джерело"},
+    "Шаблони":    {"Власник", "Джерело"},
+    "Рісьорчі":   {"Питання / тригер", "Підтверджено локалом", "Власник", "Джерело"},
+    "Провайдери": {SUMMARY_COL, "Партнер", "Поінт оф контакт"},
+}
 
 URL_COLS = {"Файл", "Папка на Drive"}
 URL_LABEL = {"Файл": "Файл ↗", "Папка на Drive": "Папка ↗"}
 
 WIDTHS = {
-    "ID": 84, "Назва": 240, "Опис + ключові слова": 380, "Послуги": 340,
+    "ID": 84, "Назва": 240, "Опис": 420, "Послуги": 340,
     "Питання / тригер": 280, "Категорія": 130, "Юрисдикція": 90,
     "Юрисдикція / регіон": 120, "Тип послуги": 150, "Контакти": 180,
     "Поінт оф контакт": 120, "Оцінка": 120, "Партнер": 80,
@@ -106,8 +111,26 @@ def main():
             for v, (bg, fg) in RATING_COLORS.items():
                 reqs.append(_cf_rule(sid, ci, v, bg, fg))
 
-        # 3) світлі бордюри по даних
+        # 3) чекбокси ТІЛЬКИ на рядках з даними (інакше порожні рядки рябіють FALSE)
+        for idx, c in enumerate(cols):
+            if c in CHECKBOX_COLUMNS:
+                # прибрати будь-яку валідацію з усієї колонки…
+                reqs.append({"setDataValidation": {
+                    "range": {"sheetId": sid, "startRowIndex": 1, "endRowIndex": 1000,
+                              "startColumnIndex": idx, "endColumnIndex": idx + 1}}})
+                # …і повернути BOOLEAN лише там, де є дані
+                if nrows > 1:
+                    reqs.append({"setDataValidation": {
+                        "range": {"sheetId": sid, "startRowIndex": 1, "endRowIndex": nrows,
+                                  "startColumnIndex": idx, "endColumnIndex": idx + 1},
+                        "rule": {"condition": {"type": "BOOLEAN"}}}})
+
+        # 4) світлі бордюри тільки по даних
         reqs.append(bp.border_req(sid, 0, nrows, len(cols)))
+
+        # очистити все нижче даних (FALSE-буфер, артефакти валідації)
+        if nrows < 999:
+            ws.batch_clear([f"A{nrows + 1}:Z1000"])
 
         kb.ss.batch_update({"requests": reqs})
 
