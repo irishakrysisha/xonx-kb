@@ -51,16 +51,19 @@ def _link(gid, label):
 
 
 def _index_formula():
-    """Зведення всіх карток у 5 колонок: Тип | ID | Назва | Facet | Опис."""
+    """Зведення карток: Тип | ID | Назва | Facet | Опис | Ключові слова.
+    Колонка F (ключові слова) — лише для пошуку, у видачі не показується."""
     blocks = []
     for tname, _desc, label, facet in SHELVES:
         naz = _col(tname, "Назва")
         fac = _col(tname, facet)
         opy = _col(tname, "Опис")
+        kw = _col(tname, "Ключові слова")
         blocks.append(
             f'ARRAYFORMULA(IF(LEN(\'{tname}\'!{naz}2:{naz}),"{label}","")), '
             f'\'{tname}\'!A2:A, \'{tname}\'!{naz}2:{naz}, '
-            f'\'{tname}\'!{fac}2:{fac}, \'{tname}\'!{opy}2:{opy}')
+            f'\'{tname}\'!{fac}2:{fac}, \'{tname}\'!{opy}2:{opy}, '
+            f'\'{tname}\'!{kw}2:{kw}')
     return "=IFERROR({" + " ; ".join(blocks) + "},)"
 
 
@@ -137,10 +140,11 @@ def main():
     inp = f"B{s1}"
     res1 = idx["res"] + 1
     rows[idx["res"]][0] = (
-        f'=IFERROR(QUERY(_Index!A:E,"where B <> \'\' and (lower(C) contains \'"'
-        f'&LOWER({inp})&"\' or lower(D) contains \'"&LOWER({inp})&"\' or lower(E) '
-        f'contains \'"&LOWER({inp})&"\') limit 12 label A \'\', B \'\', C \'\', '
-        f'D \'\', E \'\'",0),"Нічого не знайдено")')
+        f'=IFERROR(QUERY(_Index!A:F,"select A,B,C,D,E where B <> \'\' and '
+        f'(lower(C) contains \'"&LOWER({inp})&"\' or lower(D) contains \'"&LOWER({inp})'
+        f'&"\' or lower(E) contains \'"&LOWER({inp})&"\' or lower(F) contains \'"'
+        f'&LOWER({inp})&"\') limit 12 label A \'\', B \'\', C \'\', D \'\', E \'\'",0),'
+        f'"Нічого не знайдено")')
 
     home.clear()
     home.update("A1", rows, value_input_option="USER_ENTERED")

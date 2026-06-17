@@ -16,7 +16,8 @@ DRIVE_ROOT_NAME = "X-ON-X KB"
 # --- канонічні назви службових колонок (щоб код не покладався на літерали) ---
 ID_COL        = "ID"
 NAME_COL      = "Назва"
-SUMMARY_COL   = "Опис"   # це читають пошук і AI (обовʼязкове)
+SUMMARY_COL   = "Опис"            # короткий людський опис (обовʼязкове)
+KEYWORDS_COL  = "Ключові слова"   # окремо — теги/терміни для пошуку (необовʼязкове)
 STATUS_COL    = "Статус"
 RELATED_COL   = "Звʼязки"
 EMBEDDING_COL = "Embedding"              # прихована колонка, вектор для семантики
@@ -26,7 +27,7 @@ CREATED_AT    = "Створено"
 UPDATED_AT    = "Оновлено"
 
 # службовий хвіст, спільний для всіх типів (після людських полів)
-_TAIL = [SUMMARY_COL, STATUS_COL, RELATED_COL, EMBEDDING_COL,
+_TAIL = [SUMMARY_COL, KEYWORDS_COL, STATUS_COL, RELATED_COL, EMBEDDING_COL,
          CREATED_BY, CREATED_AT, UPDATED_AT]
 
 # --- типи карток (полиці) ----------------------------------------------------
