@@ -36,6 +36,14 @@ def _now():
     return datetime.now().strftime("%Y-%m-%d %H:%M")
 
 
+def _a1(row, col):
+    s = ""
+    while col:
+        col, r = divmod(col - 1, 26)
+        s = chr(65 + r) + s
+    return f"{s}{row}"
+
+
 def _file_id_from_link(link):
     """Extract a Drive file/folder id from a share link, or return as-is."""
     if not link:
@@ -249,6 +257,12 @@ class KB:
               for c in cols if c in CHECKBOX_COLUMNS]
         if cb:
             self.ss.batch_update({"requests": cb})
+            # значення чекбоксів — СПРАВЖНІ булеві (USER_ENTERED), інакше текст
+            # "TRUE/FALSE" ламає галочку
+            cbv = [{"range": f"{table}!{_a1(last + 1, cols.index(c) + 1)}",
+                    "values": [[str(fields.get(c, "")).strip().upper() == "TRUE"]]}
+                   for c in cols if c in CHECKBOX_COLUMNS]
+            self.ss.values_batch_update({"valueInputOption": "USER_ENTERED", "data": cbv})
 
         # перейменувати + розкласти файл по папках (документи/рісьорчі)
         try:

@@ -174,6 +174,7 @@ def main():
                 reqs.append(_cf_rule(sid, ci, v, bg, fg))
 
         # 3) чекбокси ТІЛЬКИ на рядках з даними (інакше порожні рядки рябіють FALSE)
+        cb_value_updates = []
         for idx, c in enumerate(cols):
             if c in CHECKBOX_COLUMNS:
                 # прибрати будь-яку валідацію з усієї колонки…
@@ -186,6 +187,13 @@ def main():
                         "range": {"sheetId": sid, "startRowIndex": 1, "endRowIndex": nrows,
                                   "startColumnIndex": idx, "endColumnIndex": idx + 1},
                         "rule": {"condition": {"type": "BOOLEAN"}}}})
+                    # нормалізувати значення в СПРАВЖНІ булеві (інакше текст "TRUE"
+                    # ламає галочку) — перезаписуємо USER_ENTERED
+                    for r in range(1, nrows):
+                        raw = (vals[r][idx] if idx < len(vals[r]) else "").strip().upper()
+                        cb_value_updates.append({
+                            "range": f"{name}!{_a1(r + 1, idx + 1)}",
+                            "values": [[True if raw in ("TRUE", "✓", "✔", "ТАК") else False]]})
 
         # 4) світлі бордюри тільки по даних
         reqs.append(bp.border_req(sid, 0, nrows, len(cols)))
@@ -195,6 +203,11 @@ def main():
             ws.batch_clear([f"A{nrows + 1}:Z1000"])
 
         kb.ss.batch_update({"requests": reqs})
+
+        # 3b) застосувати нормалізовані булеві значення чекбоксів
+        if cb_value_updates:
+            kb.ss.values_batch_update(
+                {"valueInputOption": "USER_ENTERED", "data": cb_value_updates})
 
         # 4) сирі URL → HYPERLINK «↗»
         link_updates = []
