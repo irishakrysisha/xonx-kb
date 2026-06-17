@@ -97,7 +97,7 @@ TAXONOMY_VALUES = {
         "Корп. зміни / реорганізація", "Довіреність",
         # 1.3 Інвестиційні
         "SAFE / convertible", "SHA", "SPA", "Subscription agreement", "Side letter",
-        "Vesting agreement", "Cap table", "Put & Call option",
+        "Disclosure letter", "Vesting agreement", "Cap table", "Put & Call option",
         # 1.4 Трудові / HR
         "Трудовий договір", "ЦПД", "Наказ", "ESOP / опціони",
         # 1.5 Політики

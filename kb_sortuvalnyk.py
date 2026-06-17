@@ -114,6 +114,7 @@ _DOCTYPE_KEYWORDS = {
     "SPA":                        [" spa ", "share purchase", "купівлі-продажу частк", "купівлі-продажу акці"],
     "Subscription agreement":     ["subscription agreement", "договір підписк"],
     "Side letter":                ["side letter", "сайд-лист"],
+    "Disclosure letter":          ["disclosure letter", "disclosure schedule", "лист про розкриття"],
     "Vesting agreement":          ["vesting", "вестинг"],
     "Cap table":                  ["cap table", "капіталізаційн табл"],
     "Put & Call option":          ["put option", "call option", "put&call", "опціон put", "опціон call"],

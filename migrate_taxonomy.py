@@ -45,14 +45,16 @@ def main():
     for name, spec in TABLES.items():
         ws = kb.ss.worksheet(name)
         new_cols = spec["columns"]
-        vals = ws.get_all_values()
+        # ВАЖЛИВО: читаємо ФОРМУЛИ (не відображення), щоб не розплющити HYPERLINK
+        # (Файл / Папка на Drive) у текст «Файл ↗» і не втратити URL.
+        vals = ws.get("A1:CZ1000", value_render_option="FORMULA")
         old_header = vals[0] if vals else []
         # перекласти кожен наявний рядок у нову розкладку колонок за назвою;
         # ALIAS = перейменовані колонки (нова назва → стара, звідки тягнути дані)
         ALIAS = {"Право": "Юрисдикція"}
         records = []
         for row in vals[1:]:
-            if not any(c.strip() for c in row):
+            if not any(str(c).strip() for c in row):
                 continue
             rec = {old_header[i]: (row[i] if i < len(row) else "")
                    for i in range(len(old_header))}
@@ -61,7 +63,8 @@ def main():
 
         ncols_old = max(len(old_header), len(new_cols))
         ws.batch_clear([f"A1:{_col(ncols_old + 2)}1000"])
-        ws.update("A1", [new_cols] + records, value_input_option="RAW")
+        # USER_ENTERED — щоб формули (=HYPERLINK) лишались формулами, а не текстом
+        ws.update("A1", [new_cols] + records, value_input_option="USER_ENTERED")
 
         sid = ws.id
         reqs += _clear_validation(sid, ncols_old)

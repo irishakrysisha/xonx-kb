@@ -17,6 +17,7 @@ Design rules enforced here (not in the sheet):
 """
 import json
 import os
+import re
 from datetime import datetime
 
 from kb_client import get_clients
@@ -249,6 +250,12 @@ class KB:
         if cb:
             self.ss.batch_update({"requests": cb})
 
+        # перейменувати + розкласти файл по папках (документи/рісьорчі)
+        try:
+            self.relocate_file(new_id)
+        except Exception:
+            pass  # розкладання не критичне — картка вже створена
+
         # файл лишається там, де його поклав sortuvalnyk (_processed); каталог
         # просто посилається на нього через поле «Файл». Окремих секційних
         # папок нема — тип картки задає сам каталог.
@@ -294,6 +301,61 @@ class KB:
             except KBError as e:
                 out.append((r[ti], f"ERROR: {e}"))
         return out
+
+    # -- файли на Drive: перейменування + розкладання по папках --------------- #
+    def _find_or_create_folder(self, parent_id, name):
+        nq = name.replace("'", "\\'")
+        q = (f"'{parent_id}' in parents and name='{nq}' and trashed=false "
+             "and mimeType='application/vnd.google-apps.folder'")
+        r = self.drive.files().list(q=q, fields="files(id)", supportsAllDrives=True,
+                                    includeItemsFromAllDrives=True).execute().get("files", [])
+        if r:
+            return r[0]["id"]
+        return self.drive.files().create(
+            body={"name": name, "mimeType": "application/vnd.google-apps.folder",
+                  "parents": [parent_id]}, fields="id", supportsAllDrives=True).execute()["id"]
+
+    def _ensure_path(self, segments):
+        pid = self.cfg["folders"]["_root"]
+        for seg in segments:
+            pid = self._find_or_create_folder(pid, seg)
+        return pid
+
+    def _file_destination(self, table, rec):
+        """Сегменти папки за погодженим деревом. None → файл не розкладаємо."""
+        safe = lambda s: (str(s or "").replace("/", "-").strip() or "_Інше")
+        if table in ("Прецеденти", "Шаблони"):
+            leaf = "Precedents" if table == "Прецеденти" else "Templates"
+            return ["Документи", safe(rec.get("Категорія")),
+                    safe(rec.get("Тип документа")), safe(rec.get("Право")), leaf]
+        if table == "Рісьорчі":
+            return ["Рісьорчі", safe(rec.get("Сфера")), safe(rec.get("Право"))]
+        return None  # Провайдери мають власну «Папку на Drive», не чіпаємо
+
+    def relocate_file(self, rec_id, file_id=None):
+        """Перейменувати файл картки за конвенцією і покласти в потрібну папку.
+
+        Назва: «{ID} — {Назва}.{ext}». Папки створюються on-demand. webViewLink
+        не змінюється (id той самий), але оновлюємо «Файл» якщо він був порожній.
+        """
+        table, row_i, header, rec = self._locate(rec_id)
+        segs = self._file_destination(table, rec)
+        if not segs:
+            return None
+        fid = file_id or _file_id_from_link(rec.get("Файл", ""))
+        if not fid or fid == rec.get("Файл", ""):   # лінк відсутній/не-URL
+            return None
+        meta = self.drive.files().get(fileId=fid, fields="name,parents",
+                                      supportsAllDrives=True).execute()
+        ext = os.path.splitext(meta["name"])[1]
+        slug = re.sub(r'[\\/:*?"<>|]+', " ", rec.get(NAME_COL, "")).strip()[:60]
+        newname = f"{rec_id} — {slug}{ext}" if slug else f"{rec_id}{ext}"
+        leaf = self._ensure_path(segs)
+        res = self.drive.files().update(
+            fileId=fid, addParents=leaf, removeParents=",".join(meta.get("parents", [])),
+            body={"name": newname}, fields="id,webViewLink", supportsAllDrives=True).execute()
+        self.ws(table).update_cell(row_i, header.index("Файл") + 1, res["webViewLink"])
+        return f"{'/'.join(segs)}/{newname}"
 
     def reject(self, temp_id, reviewer, notes=""):
         row_i, _ = self._inbox_locate(temp_id)
