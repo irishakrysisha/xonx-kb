@@ -230,10 +230,29 @@ def main():
         {"Temp_ID": 90, "Цільова полиця": 120, "Опис": 360, "Деталі_JSON": 220,
          "Ким запропоновано": 140, "Коли": 150, "Рецензент": 110, "Нотатки": 200,
          "Result_ID": 90})
-    in_reqs, _ = _style_reference(kb.ss.worksheet(INBOX), INBOX_COLUMNS,
+    inbox_ws = kb.ss.worksheet(INBOX)
+    in_reqs, _ = _style_reference(inbox_ws, INBOX_COLUMNS,
                                   widths=inbox_w, freeze_col=True)
+    # декluttering: гасимо сірим оброблені рядки (approved/rejected) — у фокусі pending
+    sid_in = inbox_ws.id
+    st = _a1(2, INBOX_COLUMNS.index("Статус ревʼю") + 1).rstrip("2")  # літера колонки
+    # прибрати старі CF на Inbox, тоді додати наше
+    meta = kb.ss.fetch_sheet_metadata(
+        {"fields": "sheets(properties(title),conditionalFormats)"})
+    cnt = next((len(s.get("conditionalFormats", [])) for s in meta["sheets"]
+                if s["properties"]["title"] == INBOX), 0)
+    for i in range(cnt - 1, -1, -1):
+        in_reqs.append({"deleteConditionalFormatRule": {"sheetId": sid_in, "index": i}})
+    in_reqs.append({"addConditionalFormatRule": {"index": 0, "rule": {
+        "ranges": [{"sheetId": sid_in, "startRowIndex": 1, "endRowIndex": 1000,
+                    "startColumnIndex": 0, "endColumnIndex": len(INBOX_COLUMNS)}],
+        "booleanRule": {
+            "condition": {"type": "CUSTOM_FORMULA", "values": [{"userEnteredValue":
+                f'=OR(${st}2="approved",${st}2="rejected")'}]},
+            "format": {"backgroundColor": bp.WARM,
+                       "textFormat": {"foregroundColor": bp.DIM, "italic": True}}}}}})
     kb.ss.batch_update({"requests": in_reqs})
-    print("Inbox: brand style applied")
+    print("Inbox: brand style applied + done-rows greyed")
 
     print("DONE — KB у фірмовому стилі")
 

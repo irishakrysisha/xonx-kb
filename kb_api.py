@@ -21,7 +21,7 @@ from datetime import datetime
 
 from kb_client import get_clients
 from kb_schema import (INBOX, INBOX_COLUMNS, PREFIX_TO_TABLE, TABLES, TAXONOMY,
-                       TAXONOMY_VALUES, ID_WIDTH, COLUMN_VALIDATION,
+                       TAXONOMY_VALUES, ID_WIDTH, COLUMN_VALIDATION, CHECKBOX_COLUMNS,
                        NAME_COL, SUMMARY_COL, STATUS_COL, RELATED_COL,
                        CREATED_BY, CREATED_AT, UPDATED_AT)
 
@@ -223,6 +223,10 @@ class KB:
                        CREATED_BY: draft.get("Ким запропоновано", "agent"),
                        CREATED_AT: _now(), UPDATED_AT: _now()})
         cols = TABLES[table]["columns"]
+        # дефолт FALSE для чекбоксів, щоб вони відрендерились на новому рядку
+        for c in cols:
+            if c in CHECKBOX_COLUMNS and not str(fields.get(c, "")).strip():
+                fields[c] = "FALSE"
         # explicit placement (gspread append_row mis-detects the table when empty
         # rows carry checkbox/validation artifacts) — write at col A, first row
         # after the last ID-bearing row.
@@ -235,6 +239,15 @@ class KB:
                 last = i
         ws.update(f"A{last + 1}", [[fields.get(c, "") for c in cols]],
                   value_input_option="RAW")
+        # навісити BOOLEAN-валідацію (галочку) на чекбокс-комірки саме цього рядка,
+        # щоб свіжа картка виглядала правильно навіть без повторного kb_polish
+        cb = [{"setDataValidation": {
+                "range": {"sheetId": ws.id, "startRowIndex": last, "endRowIndex": last + 1,
+                          "startColumnIndex": cols.index(c), "endColumnIndex": cols.index(c) + 1},
+                "rule": {"condition": {"type": "BOOLEAN"}}}}
+              for c in cols if c in CHECKBOX_COLUMNS]
+        if cb:
+            self.ss.batch_update({"requests": cb})
 
         # файл лишається там, де його поклав sortuvalnyk (_processed); каталог
         # просто посилається на нього через поле «Файл». Окремих секційних
