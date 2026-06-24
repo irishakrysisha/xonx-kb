@@ -154,3 +154,55 @@ first prototype. Two things done:
 Still TODO: plug a real embeddings provider (Voyage/OpenAI key) then run `embed_all()`
 for cross-lingual semantic search; real Drive file uploads on propose(); decide on
 old sheet `1s_QPN…` deletion.
+
+---
+
+## Session 2026-06-17/24 — taxonomy split, fixes, AppSheet "library" front-end
+
+### Shipped (code, pushed to repo)
+- **Опис split** → `Опис` (short summary) + `Ключові слова` (tags). Classifier, search,
+  Home `_Index` (hidden keyword col F), polish (providers show Опис, hide keywords),
+  migration all updated. Verified keyword search works (apostille→Notarity etc).
+- **File foldering on promote** (`relocate_file`): renames to `{ID} — {Назва}.ext`, moves
+  into `Документи/{Категорія}/{Тип документа}/{Право}/[Precedents|Templates]` and
+  `Рісьорчі/{Сфера}/{Право}`. PRE-0001 filed.
+- **CRITICAL migrate bug fixed**: `migrate_taxonomy` read display text → flattened
+  HYPERLINK cells (Файл/Папка) to plain «Файл ↗», losing URLs. Now reads FORMULA +
+  writes USER_ENTERED. Recovered PRE-0001 Файл + 4 provider «Папка» links.
+- **Checkboxes**: write real booleans (Партнер etc. were text "TRUE" → broken). polish
+  normalizes + promote writes bools.
+- **Providers**: added must-have «Хто приніс контакт»; Партнер=TRUE (all 4 are partners);
+  contact person = initials **IO**; soft initials dropdown (IO/MM/VitD/VasD/VK/OK) on
+  Поінт/Хто приніс/Власник; Magrat Тип послуги still «Сервіс-провайдер» (TODO: maybe Аудитор).
+- **Taxonomy**: added «Disclosure letter» (Тип документа). 3 corrupted seed rows
+  (TPL-0001/RES-0001/RES-0002) deleted via new `kb_api.delete()`.
+- Catalog now: **PRE-0001** (pending-PII) + 4 providers; Шаблони/Рісьорчі empty.
+
+### AppSheet app "library" front-end (built live via Kapture browser automation)
+- App: **X-ON-X Knowledge Base**, appId `21e79118-ea65-4542-9daf-83e9c9d3ad8b`,
+  run link `https://www.appsheet.com/start/21e79118-ea65-4542-9daf-83e9c9d3ad8b`.
+- Done: added 4 shelf tables, **removed Home table** + dangling Home view (fixed
+  "app did not load"), created **4 deck (card) views** in primary nav
+  (Прецеденти/Провайдери/Рісьорчі/Шаблони), brand **primary colour = lime `#5A7A00`**.
+  Saved & syncing; preview works (bottom nav of 4 sections, search, OPEN URL file links).
+- Guide saved at `APPSHEET_SETUP.md`.
+
+### OPEN / next session
+1. **Sharing blocked**: app is **prototype → only creator can run**; colleague
+   **misha.plachkov@x-on-x.com** gets "no access". FIX = **Deploy** (Manage → Deploy;
+   Workspace Core licence included) then add Misha as App User. Team to test: VK
+   (Viktoriia Kotliar), OK (Oleg Kotliar), Misha. (Was about to do this.)
+2. **"More colours"** requested: do it via **Format Rules** (e.g. Оцінка
+   Recommended=green/Okay=amber/Avoid=red; categories/spheres per colour). Remote
+   browser automation of format rules proved UNRELIABLE (controls below fold, multiselect
+   misfires, kapture ids churn) — best done in live editor or guided.
+3. Optional: app logo, slice `[Статус]="active"` (hide pending-PII PRE-0001), emoji in
+   view names for colourful nav.
+4. PRE-0001 still `pending-PII` (hidden from AI until `clear_pii`).
+5. Pre-existing TODOs: embeddings key + `embed_all()`; real Drive uploads on propose();
+   delete old sheet `1s_QPN…`; `build_kb.py` seeds are stale (not used).
+
+### Kapture note
+Browser tab was connected (tabId 1112533621) on appsheet.com; toward the end element
+queries started returning empty (editor re-render/stale) — refresh (Cmd+R) before
+resuming automation.
