@@ -205,12 +205,16 @@ class KB:
                 return i, dict(zip(INBOX_COLUMNS, r + [""] * (len(INBOX_COLUMNS) - len(r))))
         raise KBError(f"{temp_id} not in Inbox")
 
-    def promote(self, temp_id, reviewer, status="active", pii_ok=False):
+    def promote(self, temp_id, reviewer, status="active", pii_ok=False, relocate=True):
         """Approve an Inbox draft into its target table with a real ID.
 
         Двошвидкісний PII-флоу: Прецеденти (реальні документи) лягають як
         'pending-PII' — поки людина не підтвердить анонімізацію (pii_ok=True
         або згодом clear_pii()). Решта типів — одразу 'active'.
+
+        relocate=False — НЕ перейменовувати/переміщувати файл на Drive (картка
+        лінкує на файл там, де він лежить). Для інжесту вже впорядкованих папок
+        (напр. VK), де структуру треба зберегти незайманою.
         """
         row_i, draft = self._inbox_locate(temp_id)
         if draft.get("Result_ID", "").strip():
@@ -265,10 +269,11 @@ class KB:
             self.ss.values_batch_update({"valueInputOption": "USER_ENTERED", "data": cbv})
 
         # перейменувати + розкласти файл по папках (документи/рісьорчі)
-        try:
-            self.relocate_file(new_id)
-        except Exception:
-            pass  # розкладання не критичне — картка вже створена
+        if relocate:
+            try:
+                self.relocate_file(new_id)
+            except Exception:
+                pass  # розкладання не критичне — картка вже створена
 
         # файл лишається там, де його поклав sortuvalnyk (_processed); каталог
         # просто посилається на нього через поле «Файл». Окремих секційних

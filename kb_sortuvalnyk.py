@@ -200,8 +200,13 @@ class Sortuvalnyk:
         c["fields"] = _sanitize(c.get("fields", {}))   # списки/off-vocab від LLM
         return c
 
-    def intake(self, raw, proposed_by="sortuvalnyk", drive_link="", hint_type=None):
-        """Розібрати і покласти чернетку в Inbox. Повертає (temp_id, c)."""
+    def intake(self, raw, proposed_by="sortuvalnyk", drive_link="", hint_type=None,
+               relocate=True):
+        """Розібрати і покласти чернетку в Inbox. Повертає (temp_id, c).
+
+        relocate=False — не переміщувати оригінал файлу при авто-promote (для
+        інжесту вже впорядкованих папок, напр. VK).
+        """
         c = self.classify(raw, hint_type)
         note = _review_note(c)
         temp_id = self.kb.propose(c["table"], c["fields"],
@@ -212,7 +217,8 @@ class Sortuvalnyk:
         c["auto_promoted"] = None
         if c.get("confidence", 0) >= AUTOPROMOTE_CONF:
             try:
-                c["auto_promoted"] = self.kb.promote(temp_id, reviewer="auto")
+                c["auto_promoted"] = self.kb.promote(temp_id, reviewer="auto",
+                                                     relocate=relocate)
             except Exception as e:  # лишиться pending на ручне рев'ю
                 c["auto_promoted"] = f"ERROR: {e}"
         return temp_id, c
