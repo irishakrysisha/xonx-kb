@@ -316,6 +316,35 @@ class KB:
                 out.append((r[ti], f"ERROR: {e}"))
         return out
 
+    def promote_confident(self, threshold=0.85, reviewer="auto"):
+        """Перенести в каталог pending-чернетки з впевненістю >= threshold.
+
+        Backfill / safety-net для авто-перенесення: пробігає Inbox, читає
+        впевненість із «Нотатки» (сортувальник пише «впевненість 0.NN») і
+        promote-ить ті, що ще без Result_ID і не позначені людиною. Steady-state
+        авто-перенесення робить сам сортувальник у intake(); цей метод підбирає
+        те, що просочилось (напр. тимчасова помилка promote) чи давній backlog.
+        """
+        vals = self.ws(INBOX).get_all_values()
+        ti = INBOX_COLUMNS.index("Temp_ID")
+        ni = INBOX_COLUMNS.index("Нотатки")
+        ri = INBOX_COLUMNS.index("Result_ID")
+        out = []
+        for r in vals[1:]:
+            if len(r) <= ti or not r[ti].strip():
+                continue
+            if len(r) > ri and r[ri].strip():
+                continue  # вже перенесено
+            note = r[ni] if len(r) > ni else ""
+            m = re.search(r"впевненість\s+([0-9]*\.?[0-9]+)", note)
+            if not m or float(m.group(1)) < threshold:
+                continue
+            try:
+                out.append((r[ti], self.promote(r[ti], reviewer=reviewer)))
+            except KBError as e:
+                out.append((r[ti], f"ERROR: {e}"))
+        return out
+
     # -- файли на Drive: перейменування + розкладання по папках --------------- #
     def _find_or_create_folder(self, parent_id, name):
         nq = name.replace("'", "\\'")

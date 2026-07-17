@@ -27,6 +27,10 @@ SPHERES = TAXONOMY_VALUES["Сфера"]
 DOCTYPES = TAXONOMY_VALUES["Тип документа"]
 FORMS = TAXONOMY_VALUES["Форма"]
 
+# Поріг впевненості для авто-перенесення чернетки одразу в каталог (без ручного
+# схвалення). Нижчі за поріг лишаються pending на ручне рев'ю. env-настроюване.
+AUTOPROMOTE_CONF = float(os.environ.get("KB_AUTOPROMOTE_CONF", "0.85"))
+
 # --- маркери для fallback-класифікації --------------------------------------
 _CAT_KEYWORDS = {
     "Договірні":          ["nda", "договір", "угод", "contract", "mou", "term sheet", "ліценз"],
@@ -175,6 +179,14 @@ class Sortuvalnyk:
         temp_id = self.kb.propose(c["table"], c["fields"],
                                   drive_link=drive_link, proposed_by=proposed_by,
                                   details=c["fields"], note=note)
+        # Впевнені чернетки одразу в каталог; невпевнені — на ручне схвалення.
+        # PII-гейт зберігається (Прецеденти лягають pending-PII усередині promote).
+        c["auto_promoted"] = None
+        if c.get("confidence", 0) >= AUTOPROMOTE_CONF:
+            try:
+                c["auto_promoted"] = self.kb.promote(temp_id, reviewer="auto")
+            except Exception as e:  # лишиться pending на ручне рев'ю
+                c["auto_promoted"] = f"ERROR: {e}"
         return temp_id, c
 
     # -- обробка Drive-папки Inbox ------------------------------------------ #
@@ -202,7 +214,11 @@ class Sortuvalnyk:
             try:
                 tid, c = self.intake(text[:6000], proposed_by="sortuvalnyk:drive",
                                      drive_link=f.get("webViewLink", ""))
-                out.append((f["name"], tid, f"{c['table']} (conf={c['confidence']})"))
+                ap = c.get("auto_promoted")
+                tail = (f" → {ap}" if ap and not str(ap).startswith("ERROR")
+                        else " → pending" if ap is None else f" → {ap}")
+                out.append((f["name"], tid,
+                            f"{c['table']} (conf={c['confidence']}){tail}"))
                 self._move(f["id"], done)
             except Exception as e:
                 out.append((f["name"], None, f"ПОМИЛКА: {e}"))
