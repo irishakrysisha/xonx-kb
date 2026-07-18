@@ -197,6 +197,13 @@ class Sortuvalnyk:
         if c is None:
             c = _heuristic(raw, hint_type)
         c["table"] = _canon_table(c.get("table", ""))  # LLM інколи дає однину
+        # Бізнес-правило (Ірина, 2026-07): у «Шаблони» потрапляє ЛИШЕ верифіковане
+        # з впевненістю 1.0. Будь-яка невпевненість → «Прецеденти» (безпечніший
+        # дефолт: реальний документ, лягає під PII-гейт). Шаблон = ручне рішення.
+        if c["table"] == "Шаблони" and float(c.get("confidence", 0) or 0) < 1.0:
+            c["table"] = "Прецеденти"
+            c.setdefault("reasons", []).append(
+                "правило: шаблон лише при впевненості 1.0 → в прецедент")
         c["fields"] = _sanitize(c.get("fields", {}))   # списки/off-vocab від LLM
         return c
 
